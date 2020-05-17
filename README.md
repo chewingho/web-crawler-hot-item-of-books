@@ -1,22 +1,28 @@
 # web-crawler-hot-item-of-books
 ----
 ## Description
-> 爬取博客來商品分類，取得分類的前10熱門商品分類、名稱、排名、超連結，並匯出成實體檔案
+爬取博客來商品前10熱門商品：
+1. 大分類(中文書、簡體書、MOOK)
+2. 中文書中細分類(文學小說、商業理財等...)
+分類、名稱、排名、超連結、爬蟲日期
+
+並匯入MySQL資料庫
+
 ----
 ## Process
-1. import要使用到的module
+1. import要使用到的module，為爬蟲清理資料和匯入資料庫使用  
 ```python
-import pandas as pd
-import re
+#資料清理用
 import requests
 from bs4 import BeautifulSoup
+import pandas as pd
+from datetime import datetime
+#匯入資料庫
+import mysql.connector
+from mysql.connector import Error
+import pymysql
 ```
-2. 建立表格，共4個欄位:分類(category)、名稱(name)、排行(rank)、超連結(hyperlink)，pattern是為了之後category準備
-```python
-df = pd.DataFrame({'category': [], 'name': [], 'rank': [], 'hyperlink': []})
-pattern = 'https:\/\/www\.books\.com\.tw\/web\/(.*)'#category
-```
-3.  在博客來首頁，點擊看全部商品分類，取得網址後，開始爬蟲！但是回傳資訊怪怪的!  
+2.  在博客來首頁，點擊看全部商品分類，取得網址後，開始爬蟲！但是回傳資訊怪怪的!  
 ```python
 r = requests.get('https://www.books.com.tw/web/sys_categoryIndex')
 soup = BeautifulSoup(r.text, 'html.parser')
@@ -28,7 +34,7 @@ print(soup)
 <html xmlns="http://www.w3.org/1999/xhtml"><head><meta content="TEXT/HTML; CHARSET=utf-8" http-equiv="CONTENT-TYPE"/><title>Error</title></head><body><h2>Error</h2><table bgcolor="#FEEE7A" border="0" cellpadding="0" cellspacing="0" summary="Error" width="400"><tr><td><table border="0" cellpadding="3" cellspacing="1" summary="Error"><tr align="left" bgcolor="#FBFFDF" valign="top"><td><strong>Error</strong></td></tr><tr bgcolor="#FFFFFF" valign="top"><td>This page can't be displayed. Contact support for additional information.<br/>The Event ID is: 5343500884002.<br/>The Session ID is: N/A.</td></tr></table></td></tr></table></body></html>
 ```
 > google發生什麼事，發現沒有提供user-agent，因此被重新導向了，如何取得user-agent呢？  
-> 在博客來首頁網址後面加入/robots.txt，可以得知user-agent為*，再加上From為自己的E-mail  
+> 在博客來首頁網址後面加入/robots.txt，可以得知user-agent為*  
 > 發出request時傳出headers，之後就可以取得原始碼，進一步剖析  
 ```python
 headers = {
@@ -36,7 +42,7 @@ headers = {
     'From': ''#E-mail
 }
 ```
-4. 檢視原始碼，大分類可以用div,class_=mod type03_m008 clearfix取得  
+3. 檢視原始碼，大分類可以用div,class_=mod type03_m008 clearfix取得  
 ```python
 category_list = soup.find_all("div", "mod type03_m008 clearfix")
 for i in range(1, len(category_list)):
@@ -72,34 +78,33 @@ https://www.books.com.tw/web/starbucks
 https://www.books.com.tw/web/stationery
 https://www.books.com.tw/web/watch
 ```
-5.  爬取熱門商品的function如下
+4.  爬取熱門商品的function如下  
+> 並不是每個大類都有暢銷商品排行，所以要看category_list是否不為空值再繼續爬  
 ```python
 def category_bestseller(url, df):
-    r_category = requests.get(url, headers = headers, allow_redirects = True)
+    r_category = requests.get(url, headers=headers,allow_redirects=True)
     soup = BeautifulSoup(r_category.text, 'html.parser')
-    category_list = soup.find_all("ul", "number_a")
+    category_list = soup.find_all("ul","number_a")
     count = 1
-    #不是每一分類都有熱門排行
     if category_list != []:
         for item in category_list:
             for i in range(1,len(item.find_all("a"))):
-                new_row = {'category': re.match(pattern, url).group(1), 'name': item.find_all("a")[i].text, 'rank': count, 'hyperlink': item.find_all("a")[i]['href']}
-                df = df.append(new_row, ignore_index = True)
+                new_row = {'category':categoryDic[url], 'item_name':item.find_all("a")[i].text, 'ranking':f'{count:.0f}', 'hyperlink':item.find_all("a")[i]['href'], 'update_date': today}
+                df = df.append(new_row, ignore_index=True)
                 count = count + 1
     return df
 ```
-6. 來看看df的結果，row的數量應該要是10的倍數才對！  
-> 其實magazine、fbooks雖然有爬到資訊，但是和books、china、mooks的資訊不相同，將這兩個分類刪除
+5. 整理爬下來的資訊，刪除錯誤資訊  
+> magazine、fbooks雖然有爬到資訊，但是和books、china、mooks的資訊不相同，將這兩個分類刪除
 ```python
 df.drop(df.loc[df['category']=='magazine'].index, inplace = True)
 df.drop(df.loc[df['category']=='fbooks'].index, inplace = True)
 df.reset_index(drop = True, inplace = True)
 ```
-7. 最後將資料表匯出成csv檔、xls檔
-```python
-df.to_csv("博客來排行.csv", index = False)
-df.to_excel('博客來排行.xls', index = False)
-```
+6. 匯入MySQL資料庫  
+> 先建立表格[TB_RANKING](https://github.com/chewingho/web-crawler-hot-item-of-books/blob/master/TB_RANKING.sql)、[TB_SUBCATEGORY](https://github.com/chewingho/web-crawler-hot-item-of-books/blob/master/TB_SUBCATEGORY.sql)  
+> 透過[GRANT](https://github.com/chewingho/web-crawler-hot-item-of-books/blob/master/GRANT.sql)，建立ROLE、USER，讓python用python_user對資料庫進行操作，而非用原本root有權限太大的風險
+
 ----
 ## Review ##  
  本來以為每個分類皆可以爬到前10暢銷排行榜，結果只有中文書、簡體書、MOOKS三個分類有爬到。  
@@ -107,6 +112,7 @@ df.to_excel('博客來排行.xls', index = False)
 有的是沒有暢銷商品，有新品上市前10名；  
 有的可能都沒有這些資訊。  
 所以爬到的資訊其實不多QQ  
+
 ----
 ## Thanks
 * [使用偽裝user-agent爬取蝦皮購物網](https://freelancerlife.info/zh/blog/python-web-scraping-user-agent-for-shopee/)
