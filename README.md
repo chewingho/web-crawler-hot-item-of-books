@@ -10,17 +10,14 @@
 
 ----
 ## Process
-1. import要使用到的module，為爬蟲清理資料和匯入資料庫使用  
-```python
-#資料清理用
-import requests
-from bs4 import BeautifulSoup
-import pandas as pd
-from datetime import datetime
-#匯入資料庫
-import mysql.connector
-from mysql.connector import Error
-import pymysql
+1. 安裝所需套件  
+```txt
+requests==2.22.0
+beautifulsoup4==4.8.0
+pandas==0.25.1
+python-dateutil==2.8.0
+mysql-connector-python==8.0.18
+PyMySQL==0.9.3
 ```
 2.  在博客來首頁，點擊看全部商品分類，取得網址後，開始爬蟲！但是回傳資訊怪怪的!  
 ```python
