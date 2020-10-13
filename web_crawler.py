@@ -4,8 +4,7 @@ from bs4 import BeautifulSoup
 import pandas as pd
 from datetime import datetime
 #匯入資料庫
-import mysql.connector
-from mysql.connector import Error
+import mysql.connector from mysql.connector
 import pymysql
 
 categoryDic = {}
@@ -84,7 +83,7 @@ try:
     connection.commit()
     print("資料庫匯入已完成")
 
-except Error as e:
+except mysql.connector.Error as e:
     print("資料庫連接失敗：", e)
 
 finally:
