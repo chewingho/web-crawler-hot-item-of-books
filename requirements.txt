@@ -3,3 +3,4 @@ beautifulsoup4==4.8.0
 pandas==0.25.1
 python-dateutil==2.8.0
 mysql-connector-python==8.0.18
+PyMySQL==0.9.3
